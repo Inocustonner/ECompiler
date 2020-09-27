@@ -1,9 +1,12 @@
 #pragma once
 
 #include <string>
+#include "error.hpp"
 
 enum class TokenType {
   Ident,
+  Int,     // number in ebnf
+
   Terminal,// ;
 
   Colon,   // :
@@ -49,3 +52,13 @@ struct Lexer {
    long p = -1;
    long line = -1, col = -1;
 };
+
+namespace error {
+  struct LexerError : public error::Error {
+    public:
+     LexerError(Token, const char* format, ...);
+     Token meta();
+    private:
+     Token token;
+  };
+};  // namespace error

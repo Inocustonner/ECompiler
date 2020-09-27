@@ -2,13 +2,15 @@
 #include <exception>
 
 namespace error {
-  struct Error: std::exception {
+  struct Error: public std::exception {
     Error(const char* format, ...);
-    ~Error();
+    Error();
+    virtual ~Error();
 
     const char* what() const noexcept;
 
-    private:
-    char* msg;
+    protected:
+     void make_msg(const char* format, va_list args);
+     char* msg;
   };
-}
+};  // namespace error

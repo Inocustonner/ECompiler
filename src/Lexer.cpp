@@ -1,5 +1,6 @@
 #include "Lexer.hpp"
 #include "error.hpp"
+#include <cstdarg>
 
 Lexer::Lexer(const char* file_path) {
   fopen_s(&file_p, file_path, "rb");
@@ -63,6 +64,71 @@ Token* Lexer::next_token() {
 
     default:
     // number
+    if (isdigit(curr)) {
+#define CHAR_DIGIT_TO_I(c) ((c) - 0x30)
+      long number = CHAR_DIGIT_TO_I(curr);
+      long exp = 10;
+      advance();
+
+      bool hex = curr == 'x';
+      if (hex)
+        exp = 0x10;
+      bool octal = curr == 'o';
+      if (octal)
+        exp = 8;
+      bool decimal = isdigit(curr);
+      if (decimal)
+        number = number * exp + CHAR_DIGIT_TO_I(curr);
+      advance();
+
+      TokenNumber token = {
+        .p = p, .line = line, 
+        .col = col, .tok = TokenType::Int
+      };
+
+      auto hexalphanumber = [](char c) -> long {
+        long numbers[] = {0xA, 0xB, 0xC, 0xD, 0xE, 0xF};
+        if ('a' <= c && c <= 'f')
+          return numbers[c - 'a'];
+        else if ('A' <= c && c <= 'F')
+          return numbers[c - 'A'];
+        else
+          return -1;
+      };
+
+      for (; isalnum(curr); advance()) {
+        if (isdigit(curr)) {
+          // check boundaries
+          if (octal && CHAR_DIGIT_TO_I(curr) >= 8) {
+            throw error::LexerError(token, "Character '%c' doesn't belong to octal digits", curr);
+          }
+          number = number * exp + CHAR_DIGIT_TO_I(curr);
+
+        } else if (auto hnumber = hexalphanumber(curr); hnumber != -1 && hex) {
+          number = number * exp + hnumber;
+        } else {
+          throw error::LexerError(token,
+                                  "Character '%c' doesn't belong to %s numbers", curr,
+                                  decimal ? "decimal" : hex ? "hex" : "octal");
+        }
+      }
+    }
     // ident
+  }
+}
+
+namespace error {
+  LexerError::LexerError(Token token, const char* format, ...): Error() {
+    va_list args;
+    va_start(args, format);
+
+    this->make_msg(format, args);
+    this->token = token;
+
+    va_end(args);
+  }
+
+  Token LexerError::meta() {
+    return token;
   }
 }

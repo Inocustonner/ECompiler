@@ -19,7 +19,7 @@ sign = "+" | "-";
 tsign = "*" | "/";
 
 number = sign?, { digit };
-hexnumber = sign?, ("0x", { hexdigit } | { hexdigit }, ( "h" | "H" ) );
+hexnumber = sign?, "0x", { hexdigit };
 octalnumber = sign?, ( "0o", { octaldigit } );
 
 ascii_char = ? ascii_char ?;
