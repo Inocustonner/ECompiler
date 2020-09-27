@@ -1,0 +1,44 @@
+(* Essentials *)
+letter = "A" | "B" | "C" | "D" | "E" | "F" | "G"
+       | "H" | "I" | "J" | "K" | "L" | "M" | "N"
+       | "O" | "P" | "Q" | "R" | "S" | "T" | "U"
+       | "V" | "W" | "X" | "Y" | "Z" | "a" | "b"
+       | "c" | "d" | "e" | "f" | "g" | "h" | "i"
+       | "j" | "k" | "l" | "m" | "n" | "o" | "p"
+       | "q" | "r" | "s" | "t" | "u" | "v" | "w"
+       | "x" | "y" | "z" ;
+
+digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+
+hexdigit = digit 
+         | "A" | "B" | "C" | "D" | "E" | "F"
+         | "a" | "b" | "c" | "d" | "e" | "f";
+octaldigit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7";
+
+sign = "+" | "-";
+tsign = "*" | "/";
+
+number = sign?, { digit };
+hexnumber = sign?, ("0x", { hexdigit } | { hexdigit }, ( "h" | "H" ) );
+octalnumber = sign?, ( "0o", { octaldigit } );
+
+ascii_char = ? ascii_char ?;
+char = "'", ascii_char, "'";
+string = '"', { ascii_char }, '"';
+
+ident = ( letter, "_", "`" ), [ ( letter | digit | "_" | "`" ) ];
+
+tl = ";"; (*terminal*)
+
+vardecl = ident, ":", ident, tl
+        | ident, ":", ident, "=", expr, tl;
+
+funcdecl = ident, "::", "(", ")", 
+           block;
+
+block = "{", [stmt], "}";
+stmt = { ( vardecl | funcdecl  ) };
+
+expr = term, [ sign, term ];
+term = factor, [ tsign, factor ];
+factor = number | ( "(", expr, ")" );
