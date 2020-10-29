@@ -26,7 +26,7 @@ ascii_char = ? ascii_char ?;
 char = "'", ascii_char, "'";
 string = '"', { ascii_char }, '"';
 
-ident = ( letter, "_", "`" ), [ ( letter | digit | "_" | "`" ) ];
+ident = ( letter, "_" ), [ ( letter | digit | "_") ];
 
 tl = ";"; (*terminal*)
 

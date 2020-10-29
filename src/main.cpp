@@ -1,16 +1,14 @@
 #include <iostream>
-#define FUNC(...) __VA_ARGS__
+#include "Compiler.hpp"
 
-enum E {
-  A, B
-};
-
-template<typename E>
-void d() {
-	std::cout << __FUNCDNAME__ << __FUNCSIG__ << __FUNCTION__ << __func__ << std::endl;
-}
+#define LEXER_TEST
+#ifdef LEXER_TEST
+#include "../test/LexerTest.cpp"
+#endif
 
 int main() {
-  std::cout << __FUNCDNAME__ << __FUNCSIG__ << __FUNCTION__ << __func__ << std::endl;
+  #ifdef LEXER_TEST
+  test1();
+  #endif
   return 0;
 }
