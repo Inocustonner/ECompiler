@@ -30,14 +30,23 @@ ident = ( letter, "_" ), [ ( letter | digit | "_") ];
 
 tl = ";"; (*terminal*)
 
+(* /////////////// DECLS /////////////// *)
+
 vardecl = ident, ":", ident, tl
         | ident, ":", ident, "=", expr, tl;
 
-funcdecl = ident, "::", "(", ")", 
+funcdecl = ident, "::", "(", ")", ident?,
            block;
+		   
+(* /////////////// ASSIGN /////////////// *)
+var_assign = ident, "=", expr;
+ 
+(* /////////////// BLOCK AND STMT /////////////// *)
 
 block = "{", [stmt], "}";
-stmt = { ( vardecl | funcdecl  ) };
+stmt = { ( vardecl | funcdecl | (expr, tl)  ) };
+
+(* /////////////// EXPR /////////////// *)
 
 expr = term, [ sign, term ];
 term = factor, [ tsign, factor ];

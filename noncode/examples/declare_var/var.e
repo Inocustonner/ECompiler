@@ -1,3 +1,6 @@
-fibbnum: int = fib(3);
-fibbnum: int = 3;
-fibbnum: string = "string";
+main::(argc: int, argv: string) int {
+	var1: bool;
+	var2: bool = true;
+	var3: string = "123";
+	var4 : int = 5;
+}

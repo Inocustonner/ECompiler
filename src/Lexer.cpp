@@ -1,6 +1,8 @@
-#include "Lexer.hpp"
+#include "Compiler.hpp"
 #include "error.hpp"
 #include <cstdarg>
+#include <magic_enum.hpp>
+
 #define IN_RANGE_INCL(from, n, to) (from <= n && n <= to)
 #define INIT_TOKEN(ident, tok_type_enum)                                       \
   (ident)->p = p;                                                              \
@@ -8,6 +10,50 @@
   (ident)->col = col;                                                          \
   (ident)->tok = tok_type_enum;
 
+void freeToken(Token *tok) {
+  assert(tok != nullptr);
+  switch (tok->tok) {
+  case TokenType::String:
+    DELETE_NOT_NULL(reinterpret_cast<TokenString *>(tok)->str);
+    delete tok;
+    break;
+  case TokenType::Ident:
+    DELETE_NOT_NULL(reinterpret_cast<TokenIdent *>(tok)->ident);
+    delete tok;
+    break;
+  default:
+    delete tok;
+  }
+}
+
+std::string serializeToken(PToken token) {
+  std::string seril;
+  seril +=
+      "Token " + std::string(magic_enum::enum_name(token->tok).data()) + "\n";
+  switch (token->tok) {
+  case TokenType::Ident: {
+    seril += "\tident: " + *static_cast<TokenIdent *>(token)->ident + "\n";
+  } break;
+  case TokenType::String: {
+    seril += "\tstr: " + *static_cast<TokenString *>(token)->str + "\n";
+  } break;
+  case TokenType::Char: {
+    seril +=
+        "\tch: " + std::to_string(static_cast<TokenChar *>(token)->ch) + "\n";
+  } break;
+  case TokenType::Int: {
+    seril +=
+        "\tnumber: " + std::to_string(static_cast<TokenInt *>(token)->number) +
+        "\n";
+  } break;
+  }
+  seril += "\tline: " + std::to_string(token->line) + "\n";
+  seril += "\tcol: " + std::to_string(token->col) + "\n";
+  seril += "\tp: " + std::to_string(token->p) + "\n";
+  seril += "\tend_p: " + std::to_string(token->end_p) + "\n";
+  return seril;
+}
+#ifndef USE_CPP_STREAM
 Lexer::Lexer(const char *file_path) {
   fopen_s(&file_p, file_path, "rb");
   if (file_p == nullptr) {
@@ -15,11 +61,24 @@ Lexer::Lexer(const char *file_path) {
   }
   advance();
 }
-
 Lexer::~Lexer() { fclose(file_p); }
+#else
+Lexer::Lexer(const char *file_path) {
+  file_s.open(file_path, std::ifstream::in);
+  if (!file_s.is_open()) {
+    throw error::Error("Unnable to open %s file", file_path);
+  }
+  advance();
+}
+Lexer::~Lexer() { file_s.close(); }
+#endif
 
 void Lexer::advance() {
+#ifndef USE_CPP_STREAM
   curr = fgetc(file_p);
+#else
+  curr = file_s.get();
+#endif
   if (curr != EOF) {
     p += 1;
     col += 1;
@@ -33,7 +92,7 @@ void Lexer::advance() {
 #define TOKEN_MATCH_RETURN(tokc, toktype)                                      \
   case tokc: {                                                                 \
     Token *token = new Token;                                                  \
-    token->p = p, token->line = line, token->col = col;                        \
+    token->p = p, token->line = line, token->col = col, token->end_p = p + 1;  \
     token->tok = toktype;                                                      \
     advance();                                                                 \
     return token;                                                              \
@@ -57,11 +116,17 @@ Token *Lexer::next_token() {
       token->tok = TokenType::DColon;
       advance();
     }
+    token->end_p = p;
     return token;
   }
+    TOKEN_MATCH_RETURN(';', TokenType::Terminal);
 
-    TOKEN_MATCH_RETURN('{', TokenType::OBracket);
-    TOKEN_MATCH_RETURN('}', TokenType::CBracket);
+    TOKEN_MATCH_RETURN(',', TokenType::Comma);
+
+    TOKEN_MATCH_RETURN('[', TokenType::OBracket);
+    TOKEN_MATCH_RETURN(']', TokenType::OBracket);
+    TOKEN_MATCH_RETURN('{', TokenType::OBracer);
+    TOKEN_MATCH_RETURN('}', TokenType::CBracer);
     TOKEN_MATCH_RETURN('(', TokenType::OParen);
     TOKEN_MATCH_RETURN(')', TokenType::CParen);
 
@@ -70,8 +135,6 @@ Token *Lexer::next_token() {
     TOKEN_MATCH_RETURN('*', TokenType::Asterisk);
     TOKEN_MATCH_RETURN('/', TokenType::Slash);
     TOKEN_MATCH_RETURN('=', TokenType::Eq);
-
-    TOKEN_MATCH_RETURN(';', TokenType::Terminal);
 
   case '\'': {
     TokenChar *token = new TokenChar;
@@ -114,15 +177,18 @@ Token *Lexer::next_token() {
   case '"': {
     TokenString *token = new TokenString;
     INIT_TOKEN(token, TokenType::String);
+    token->str = new std::string;
+
     advance();
 
     do {
-      token->str.push_back(curr);
+      token->str->push_back(curr);
       advance();
     } while (curr != '"' && curr != EOF);
 
     if (curr == '"') {
       advance();
+      token->end_p = p;
       return token;
     } else
       break;
@@ -181,16 +247,19 @@ Token *Lexer::next_token() {
                       : "octal");
         }
       }
+      token->end_p = p;
       token->number = number;
       return token;
 
     } else if (isVarChar(curr)) {
       TokenIdent *ident_tok = new TokenIdent;
       INIT_TOKEN(ident_tok, TokenType::Ident);
+      ident_tok->ident = new std::string;
       do {
-        ident_tok->ident.push_back(curr);
+        ident_tok->ident->push_back(curr);
         advance();
       } while (isVarChar(curr, true));
+      ident_tok->end_p = p;
       return ident_tok;
 
     } else if (curr == EOF) {
