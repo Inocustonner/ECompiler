@@ -8,10 +8,7 @@ enum class AstType {
   StmtBlock,
 
   Expr,
-  Term,
-  Factor,
 
-  Assign,
   VarDecl,
   FuncDecl,
   FuncArg
@@ -85,6 +82,7 @@ struct AstStmtBlock : public Ast {
   std::vector<Ast *> stmt_vec;
 };
 
+void freeAst(Ast* ast);
 std::string serializeAstXml(const Ast* ast);
 
 struct Parser {

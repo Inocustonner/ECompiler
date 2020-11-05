@@ -20,45 +20,123 @@
   INIT_AST(var, Expr);                                                         \
   var->expr_type = ExprType::Expr_type
 
+#define CAST_INIT_CONST_AST(name, type)                                              \
+  const Ast##type *name = static_cast<const Ast##type *>(ast);
+
+#define CAST_INIT_AST(name, type)                                              \
+  Ast##type *name = static_cast<Ast##type *>(ast);
+
 extern bool g_verbose;
+
+
+void freeAst(Ast* ast) {
+  switch (ast->ast) {
+  case AstType::StmtBlock: {
+    CAST_INIT_AST(stmt_block, StmtBlock);
+    for (Ast* child_ast : stmt_block->stmt_vec)
+      freeAst(child_ast);
+  }break;
+
+  case AstType::Expr: {
+    CAST_INIT_AST(expr, Expr);
+    switch (expr->expr_type) {
+    case ExprType::Add:
+    case ExprType::Sub:
+    case ExprType::Mult:
+    case ExprType::Div:
+    case ExprType::Assign: {
+      freeAst(expr->fst);
+      freeAst(expr->snd);
+      
+      expr->fst = nullptr;
+      expr->snd = nullptr;
+    }break;
+    case ExprType::Ident: {
+      delete expr->ident;
+      expr->ident = nullptr;
+    }break;
+    case ExprType::Number: break;
+    case ExprType::Char: break;
+    case ExprType::String: {
+      delete expr->str;
+      expr->str = nullptr;
+    }break;
+    }
+  }break;
+
+  case AstType::VarDecl: {
+    CAST_INIT_AST(var_decl, VarDecl);
+    if (var_decl->init_expr)
+      freeAst(var_decl->init_expr);
+    
+    delete var_decl->ident;
+    var_decl->ident = nullptr;
+    
+    DELETE_NOT_NULL(var_decl->type_ident);
+    var_decl->type_ident = nullptr;
+  }break;
+    
+  case AstType::FuncDecl: {
+    CAST_INIT_AST(func_decl, FuncDecl);
+    for (AstFuncArg* &func_arg: func_decl->args) {
+      freeAst(func_arg);
+      func_arg = nullptr;
+    }
+    delete func_decl->ident;
+    func_decl->ident = nullptr;
+    
+    DELETE_NOT_NULL(func_decl->ret_type);
+    freeAst(func_decl->stmt_block);
+    func_decl->stmt_block = nullptr;
+  }break;
+
+  case AstType::FuncArg: {
+    CAST_INIT_AST(func_arg, FuncArg);
+    delete func_arg->ident;
+    delete func_arg->type_ident;
+    func_arg->ident = nullptr;
+    func_arg->type_ident = nullptr;
+  }break;
+  
+  }
+  delete ast;
+}
 
 std::string serializeAstXml(const Ast *ast) {
 #define XML_TAG(name) (std::string("<") + name + ">\n")
-#define CAST_INIT_AST(name, type)                                              \
-  const Ast##type *name = static_cast<const Ast##type *>(ast);
   std::string block = XML_TAG(magic_enum::enum_name(ast->ast).data());
   block += XML_TAG("p") + std::to_string(ast->p) + XML_TAG("/p");
   block += XML_TAG("end_p") + std::to_string(ast->end_p) + XML_TAG("/end_p");
 
   switch (ast->ast) {
   case AstType::StmtBlock: {
-    CAST_INIT_AST(ast_block, StmtBlock);
+    CAST_INIT_CONST_AST(ast_block, StmtBlock);
     for (const Ast *stmt_ast : ast_block->stmt_vec) {
       block += serializeAstXml(stmt_ast);
     }
   } break;
 
   case AstType::FuncDecl: {
-    CAST_INIT_AST(func_decl, FuncDecl);
+    CAST_INIT_CONST_AST(func_decl, FuncDecl);
     block += XML_TAG("header_end_p") + std::to_string(func_decl->header_end_p) + XML_TAG("/header_end_p");
     block += XML_TAG("ret_type") + *func_decl->ret_type + XML_TAG("/ret_type");
     block += XML_TAG("Arguments");
     for (const AstFuncArg *arg : func_decl->args) {
       block += serializeAstXml(static_cast<const Ast *>(arg));
     }
-    block += serializeAstXml(func_decl->stmt_block);
     block += XML_TAG("/Arguments");
+    block += serializeAstXml(func_decl->stmt_block);
   } break;
 
   case AstType::FuncArg: {
-    CAST_INIT_AST(func_arg, FuncArg);
+    CAST_INIT_CONST_AST(func_arg, FuncArg);
     block += XML_TAG("ident") + *func_arg->ident + XML_TAG("/ident");
     block +=
         XML_TAG("type_ident") + *func_arg->type_ident + XML_TAG("/type_ident");
   } break;
 
   case AstType::VarDecl: {
-    CAST_INIT_AST(var_decl, VarDecl);
+    CAST_INIT_CONST_AST(var_decl, VarDecl);
     block += XML_TAG("ident") + *var_decl->ident + XML_TAG("/ident");
     block +=
         XML_TAG("type_ident") + *var_decl->type_ident + XML_TAG("/type_ident");
@@ -70,7 +148,7 @@ std::string serializeAstXml(const Ast *ast) {
   } break;
 
   case AstType::Expr: {
-    CAST_INIT_AST(expr, Expr);
+    CAST_INIT_CONST_AST(expr, Expr);
     block += XML_TAG("expr_type") +
              magic_enum::enum_name(expr->expr_type).data() +
              XML_TAG("/expr_type");
@@ -93,7 +171,7 @@ std::string serializeAstXml(const Ast *ast) {
   }
   block += XML_TAG("/" + magic_enum::enum_name(ast->ast).data());
   return block;
-#undef CAST_INIT_AST
+#undef CAST_INIT_CONST_AST
 #undef XML_TAG
 }
 
@@ -164,9 +242,13 @@ AstStmtBlock *Parser::stmtBlock(bool braced) {
       stmt_block->stmt_vec.push_back(expr());
     }
   }
-  if (braced)
+  if (braced) {
+    stmt_block->end_p = lookUp(0)->end_p;
     match(TokenType::CBracer);
-  stmt_block->end_p = stmt_block->stmt_vec.back()->end_p;
+  }
+  else {
+    stmt_block->end_p = stmt_block->stmt_vec.back()->end_p;
+  }
   return stmt_block;
 }
 
@@ -290,7 +372,7 @@ PARSING_METHOD_EXPR expr_arith() {
       add_expr->snd = term();
       add_expr->end_p = add_expr->snd->end_p;
 
-      arith_expr = add_expr;
+       arith_expr = add_expr;
     } else if (peek(0) == TokenType::Minus) {
       match(TokenType::Minus);
       INIT_AST_EXPR(minus_expr, Sub);

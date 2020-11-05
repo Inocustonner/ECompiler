@@ -68,11 +68,14 @@ void runParser(const std::vector<std::string> &input) {
       printf("Couldn't create/open file %s for writing\n", out_path.c_str());
       continue;
     }
-
+    
     printfv("Running parser for %s...\n", file.c_str());
     Parser parser{file.c_str()};
 
-    const std::string output = serializeAstXml(parser.parse());
+    Ast* ast = parser.parse();
+    const std::string output = serializeAstXml(ast);
+    freeAst(ast);
+    
     fwrite(output.c_str(), output.length(), 1, f);
     
     printfv("[Done]\n");
