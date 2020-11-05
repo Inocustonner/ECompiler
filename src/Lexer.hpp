@@ -1,8 +1,5 @@
 #pragma once
 
-#include "error.hpp"
-#include <string>
-
 #ifdef USE_CPP_STREAM
 #include <fstream>
 #endif
@@ -18,10 +15,12 @@ enum class TokenType {
   Char,
   String,
 
+  Return, // return
+
   Terminal, // ;
-  
+
   Comma, // ,
-  
+
   Colon,  // :
   DColon, // ::
 
@@ -35,7 +34,7 @@ enum class TokenType {
 
   OParen, // (
   CParen, // )
-  
+
   Plus,     // +
   Minus,    // -
   Asterisk, // *
@@ -65,12 +64,16 @@ struct TokenInt : Token {
   long number;
 };
 
+static const std::tuple<const char *, TokenType> g_key_words[] = {
+  {"return", TokenType::Return}
+};
+
 void freeToken(Token *tok);
 std::string serializeToken(PToken token);
 
 struct Lexer {
   Lexer(const char *file_path);
-  
+
   ~Lexer();
   Token *next_token();
 

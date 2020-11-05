@@ -35,16 +35,17 @@ tl = ";"; (*terminal*)
 vardecl = ident, ":", ident, tl
         | ident, ":", ident, "=", expr, tl;
 
-funcdecl = ident, "::", "(", ")", ident?,
+funcdecl = ident, "::", "(",(ident,":" ident , ",", [ident, ":", ident])? ")", ident?,
            block;
 		   
+return = "return", (expr)?, tl
 (* /////////////// ASSIGN /////////////// *)
 var_assign = ident, "=", expr;
  
 (* /////////////// BLOCK AND STMT /////////////// *)
 
 block = "{", [stmt], "}";
-stmt = { ( vardecl | funcdecl | (expr, tl)  ) };
+stmt = { ( vardecl | funcdecl | (expr, tl) | return  ) };
 
 (* /////////////// EXPR /////////////// *)
 

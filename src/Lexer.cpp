@@ -1,7 +1,6 @@
 #include "Compiler.hpp"
 #include "error.hpp"
 #include <cstdarg>
-#include <magic_enum.hpp>
 
 #define IN_RANGE_INCL(from, n, to) (from <= n && n <= to)
 #define INIT_TOKEN(ident, tok_type_enum)                                       \
@@ -9,6 +8,22 @@
   (ident)->line = line;                                                        \
   (ident)->col = col;                                                          \
   (ident)->tok = tok_type_enum;
+#define CONST_LEN(arr) (sizeof(arr)/sizeof(*arr))
+static bool isVarChar(CharT c, bool include_numbers = false) {
+  return IN_RANGE_INCL('a', c, 'z') || IN_RANGE_INCL('A', c, 'Z') ||
+         (c == '_') || (include_numbers && IN_RANGE_INCL('0', c, '9'));
+}
+
+static bool isKeyWord(std::string *word, TokenType *tok) {
+  for (int i = 0; i < CONST_LEN(g_key_words); ++i) {
+    if (std::get<0>(g_key_words[i]) == *word) {
+      if (tok)
+        *tok = std::get<1>(g_key_words[i]);
+      return true;
+    }
+  }
+  return false;
+}
 
 void freeToken(Token *tok) {
   assert(tok != nullptr);
@@ -97,11 +112,6 @@ void Lexer::advance() {
     advance();                                                                 \
     return token;                                                              \
   } break;
-
-static bool isVarChar(CharT c, bool include_numbers = false) {
-  return IN_RANGE_INCL('a', c, 'z') || IN_RANGE_INCL('A', c, 'Z') ||
-         (c == '_') || (include_numbers && IN_RANGE_INCL('0', c, '9'));
-}
 
 Token *Lexer::next_token() {
   while (isspace(curr))
@@ -252,16 +262,29 @@ Token *Lexer::next_token() {
       return token;
 
     } else if (isVarChar(curr)) {
-      TokenIdent *ident_tok = new TokenIdent;
-      INIT_TOKEN(ident_tok, TokenType::Ident);
-      ident_tok->ident = new std::string;
+      std::string *word = new std::string;
+      auto start_p = p;
       do {
-        ident_tok->ident->push_back(curr);
+        // ident_tok->ident->push_back(curr);
+        word->push_back(curr);
         advance();
       } while (isVarChar(curr, true));
-      ident_tok->end_p = p;
-      return ident_tok;
 
+      TokenType keyWord;
+      if (isKeyWord(word, &keyWord)) {
+        Token *tok = new Token{};
+        INIT_TOKEN(tok, keyWord);
+        tok->p = start_p;
+        tok->end_p = p;
+        return tok;
+      } else {
+        TokenIdent *ident_tok = new TokenIdent;
+        INIT_TOKEN(ident_tok, TokenType::Ident);
+        ident_tok->ident = word;
+        ident_tok->p = start_p;
+        ident_tok->end_p = p;
+        return ident_tok;
+      }
     } else if (curr == EOF) {
       Token *eof_token = new Token;
       INIT_TOKEN(eof_token, TokenType::Eof);

@@ -1,6 +1,5 @@
 #pragma once
 #include "RingArray.hpp"
-#include <vector>
 
 #define LL_N 2
 
@@ -11,7 +10,9 @@ enum class AstType {
 
   VarDecl,
   FuncDecl,
-  FuncArg
+  FuncArg,
+
+  Return
 };
 
 enum class ExprType {
@@ -44,7 +45,7 @@ struct AstExpr : public Ast {
   ExprType expr_type;
   union {
     struct {
-      AstExpr *fst;
+      AstExpr *fst; // used in return, if, for, 
       AstExpr *snd; // optional
     };
     struct {
@@ -53,9 +54,12 @@ struct AstExpr : public Ast {
     };
     std::string* ident;
     std::string* str;
+    AstExpr *ret_expr; // used in AstReturn
     char c;
   };
 };
+
+using AstReturn = AstExpr;
 
 struct AstVarDecl : public Ast {
   std::string *ident;
@@ -94,6 +98,7 @@ struct Parser {
   Ast *varDecl();
   Ast *funcDecl();
   // expr asts
+  Ast *returnStmt();
   AstExpr *expr();       // assignment
   AstExpr *expr_arith(); // + -
   AstExpr *term();       // * /

@@ -1,6 +1,5 @@
 #include "Compiler.hpp"
 #include <cstdarg>
-#include <magic_enum.hpp>
 
 #define PARSING_METHOD Ast *Parser::
 #define PARSING_METHOD_EXPR AstExpr *Parser::
@@ -36,7 +35,6 @@ void freeAst(Ast* ast) {
     for (Ast* child_ast : stmt_block->stmt_vec)
       freeAst(child_ast);
   }break;
-
   case AstType::Expr: {
     CAST_INIT_AST(expr, Expr);
     switch (expr->expr_type) {
@@ -97,6 +95,14 @@ void freeAst(Ast* ast) {
     func_arg->ident = nullptr;
     func_arg->type_ident = nullptr;
   }break;
+    
+  case AstType::Return: {
+    CAST_INIT_AST(ret, Return);
+    if (ret->ret_expr) {
+      freeAst(ret->ret_expr);
+      ret->ret_expr = nullptr;
+    }
+  }break;
   
   }
   delete ast;
@@ -119,7 +125,9 @@ std::string serializeAstXml(const Ast *ast) {
   case AstType::FuncDecl: {
     CAST_INIT_CONST_AST(func_decl, FuncDecl);
     block += XML_TAG("header_end_p") + std::to_string(func_decl->header_end_p) + XML_TAG("/header_end_p");
-    block += XML_TAG("ret_type") + *func_decl->ret_type + XML_TAG("/ret_type");
+    if (func_decl->ret_type) {
+      block += XML_TAG("ret_type") + *func_decl->ret_type + XML_TAG("/ret_type");      
+    }
     block += XML_TAG("Arguments");
     for (const AstFuncArg *arg : func_decl->args) {
       block += serializeAstXml(static_cast<const Ast *>(arg));
@@ -238,6 +246,8 @@ AstStmtBlock *Parser::stmtBlock(bool braced) {
       stmt_block->stmt_vec.push_back(varDecl());
     } else if (peek(0) == TokenType::Ident && peek(1) == TokenType::DColon) {
       stmt_block->stmt_vec.push_back(funcDecl());
+    } else if (peek(0) == TokenType::Return) {
+      stmt_block->stmt_vec.push_back(returnStmt());
     } else {
       stmt_block->stmt_vec.push_back(expr());
     }
@@ -328,18 +338,34 @@ PARSING_METHOD funcDecl() {
       func_decl->args.push_back(func_arg);
     }
   }
+  func_decl->header_end_p = tok_ident->end_p;
   match(TokenType::CParen);
 
-  tok_ident = static_cast<TokenIdent *>(*plookUp(0));
-  func_decl->ret_type = tok_ident->ident;
-  tok_ident->ident = nullptr;
+  if (peek(0) == TokenType::Ident) {
+    tok_ident = static_cast<TokenIdent *>(*plookUp(0));
+    func_decl->ret_type = tok_ident->ident;
+    tok_ident->ident = nullptr;
 
-  func_decl->header_end_p = tok_ident->end_p;
-
-  match(TokenType::Ident);
+    func_decl->header_end_p = tok_ident->end_p;
+    match(TokenType::Ident);
+  }
+  
   func_decl->stmt_block = stmtBlock();
   func_decl->end_p = func_decl->stmt_block->end_p;
   return func_decl;
+}
+
+PARSING_METHOD returnStmt() {
+  match(TokenType::Return);
+  INIT_AST(ret, Return);
+
+  if (peek(0) != TokenType::Terminal)
+    ret->ret_expr = expr();
+  else ret->ret_expr = nullptr;
+  
+  ret->end_p = lookUp(0)->end_p;
+  match(TokenType::Terminal);
+  return ret;
 }
 
 PARSING_METHOD_EXPR expr() {
