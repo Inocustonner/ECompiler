@@ -7,10 +7,14 @@ mult2::(x: int) int {
 	return x * 2;
 }
 
-main::(argc: int, argv: string) int {
+addMultAndDouble::(x: int, y: int) {
+	acc: int = (x + y) * 2;
+	return acc;
+}
+
+main::(argc: int) int {
 	x : int = 3;
-	y : int = mult2(x);
-	z : int = mult2(y);
-	voidF(x, y, z);
+	y : int = x * (4 + 5);
+	z : int = y * (y / x);
 	return 0;
 }

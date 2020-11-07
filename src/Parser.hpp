@@ -65,11 +65,13 @@ struct AstVarDecl : public Ast {
   std::string *ident;
   std::string *type_ident;
   AstExpr *init_expr;      // optional
+  ulong type_ident_p, type_ident_end_p;
 };
 
 struct AstFuncArg: public Ast {
   std::string *ident;
   std::string *type_ident;
+  ulong type_ident_p, type_ident_end_p;
 };
 
 struct AstStmtBlock;

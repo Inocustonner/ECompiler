@@ -1,9 +1,5 @@
 #pragma once
 
-#ifdef USE_CPP_STREAM
-#include <fstream>
-#endif
-
 using CharT = char;
 using StringT = std::basic_string<CharT>;
 

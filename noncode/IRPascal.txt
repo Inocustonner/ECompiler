@@ -1,0 +1,9 @@
+func addMultAndDouble
+begin
+	args x, y : int
+	vars acc: int
+	acc := x
+	acc += y
+	acc *= 2
+	ret acc // implicit variable
+end

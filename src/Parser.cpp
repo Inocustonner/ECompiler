@@ -277,7 +277,10 @@ PARSING_METHOD varDecl() {
 
   var_decl->type_ident = tok_ident->ident;
   tok_ident->ident = nullptr;
-
+  
+  var_decl->type_ident_p = tok_ident->p;
+  var_decl->type_ident_end_p = tok_ident->end_p;
+  
   match(TokenType::Ident);
 
   if (peek(0) == TokenType::Eq) {
@@ -314,6 +317,9 @@ PARSING_METHOD funcDecl() {
     func_arg->type_ident = tok_ident->ident;
     tok_ident->ident = nullptr;
     func_arg->end_p = tok_ident->end_p;
+    
+    func_arg->type_ident_p = tok_ident->p;
+    func_arg->type_ident_end_p = tok_ident->end_p;
     match(TokenType::Ident);
 
     func_decl->args.push_back(func_arg);
