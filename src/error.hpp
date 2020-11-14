@@ -4,11 +4,16 @@
 namespace error {
 enum class ErrorEnum {
   Invalid_Symbol = 0,
-  Unexpected_Token = 1,
+  Unexpected_Token,
 
-  Var_ReDecl = 2,
-  Undefined_Type = 3,
-  Is_Not_A_Type = 4,
+  Undeclared_Ident,
+
+  ReDecl,
+  Undefined_Type,
+  Is_Not_A_Type,
+
+  Assignment_To_Const,
+  Invalid_Cast
 };
 
 struct Error : public std::exception {
@@ -34,7 +39,7 @@ struct ReportMeta {
 struct Reporter {
   std::string file;
   mutable std::ifstream is;
-
+  mutable ulong errors = 0;
   Reporter(const char *file_name);
   void report_error(ReportMeta meta, const char *format, ...) const;
 

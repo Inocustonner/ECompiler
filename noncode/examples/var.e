@@ -1,6 +1,4 @@
 main::(argc: int) int {
-	var1: bool;
-	var2: bool = true;
-	var4 : int = 5;
+	var3 : int = (0x15 + 3) * 2 + (35 * 2 + (3 + 5 * 2));
 	return 0;
 }

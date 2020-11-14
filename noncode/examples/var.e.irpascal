@@ -1,0 +1,41 @@
+typedef void :void
+typedef int :int
+typedef char :char
+typedef bool :bool
+
+func main
+args
+	argc :int
+var3 :int
+begin
+	TEMP0 :int = 21
+
+	TEMP0 :int += 3
+
+	TEMP0 :int *= 2
+
+	TEMP1 :int = 35
+
+	TEMP1 :int *= 2
+
+	TEMP2 :int = 5
+
+	TEMP2 :int *= 2
+
+	TEMP2 :int += 3
+
+	TEMP1 :int += TEMP2 :int
+
+	TEMP0 :int += TEMP1 :int
+
+	var3 :int = TEMP0 :int
+
+	TEMP0 :int = 0
+
+	ret TEMP0 :int
+
+end
+
+
+begin
+end

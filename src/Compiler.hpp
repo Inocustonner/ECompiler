@@ -29,7 +29,19 @@
   delete (p)
 
 template<typename T>
-void own(std::unique_ptr<T> &up, T* &p) {
-  up.reset(p);
+void own(std::unique_ptr<T> &dst, T* &p) {
+  dst.reset(p);
   p = nullptr;
+}
+
+template<typename T>
+void own(T* &dst, T* &p) {
+  dst = p;
+  p = nullptr;
+}
+
+template<typename T>
+inline T safe_deref(T* ptr) {
+  if (ptr) return *ptr;
+  else return nullptr;
 }

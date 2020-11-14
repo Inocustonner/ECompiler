@@ -222,8 +222,10 @@ Token *Lexer::next_token() {
         advance();
       }
       bool decimal = isdigit(curr);
-      if (decimal)
+      if (decimal) {
         number = number * exp + CHAR_DIGIT_TO_I(curr);
+        advance();
+      }
 
       TokenInt *token = new TokenInt;
       INIT_TOKEN(token, TokenType::Int);

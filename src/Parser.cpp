@@ -33,7 +33,8 @@ void freeAst(Ast* ast) {
   case AstType::StmtBlock: {
     CAST_INIT_AST(stmt_block, StmtBlock);
     for (Ast* child_ast : stmt_block->stmt_vec)
-      freeAst(child_ast);
+      if (child_ast)
+        freeAst(child_ast);
   }break;
   case AstType::Expr: {
     CAST_INIT_AST(expr, Expr);
@@ -43,20 +44,24 @@ void freeAst(Ast* ast) {
     case ExprType::Mult:
     case ExprType::Div:
     case ExprType::Assign: {
-      freeAst(expr->fst);
-      freeAst(expr->snd);
+      if (expr->fst)
+        freeAst(expr->fst);
+      if (expr->snd)
+        freeAst(expr->snd);
       
       expr->fst = nullptr;
       expr->snd = nullptr;
     }break;
     case ExprType::Ident: {
-      delete expr->ident;
+      if (expr->ident)
+        delete expr->ident;
       expr->ident = nullptr;
     }break;
     case ExprType::Number: break;
     case ExprType::Char: break;
     case ExprType::String: {
-      delete expr->str;
+      if (expr->str)
+        delete expr->str;
       expr->str = nullptr;
     }break;
     }
@@ -67,7 +72,8 @@ void freeAst(Ast* ast) {
     if (var_decl->init_expr)
       freeAst(var_decl->init_expr);
     
-    delete var_decl->ident;
+    if (var_decl->ident)
+      delete var_decl->ident;
     var_decl->ident = nullptr;
     
     DELETE_NOT_NULL(var_decl->type_ident);
@@ -80,11 +86,13 @@ void freeAst(Ast* ast) {
       freeAst(func_arg);
       func_arg = nullptr;
     }
-    delete func_decl->ident;
+    if (func_decl->ident)
+      delete func_decl->ident;
     func_decl->ident = nullptr;
     
     DELETE_NOT_NULL(func_decl->ret_type);
-    freeAst(func_decl->stmt_block);
+    if (func_decl->stmt_block)
+      freeAst(func_decl->stmt_block);
     func_decl->stmt_block = nullptr;
   }break;
 
@@ -349,8 +357,11 @@ PARSING_METHOD funcDecl() {
 
   if (peek(0) == TokenType::Ident) {
     tok_ident = static_cast<TokenIdent *>(*plookUp(0));
-    func_decl->ret_type = tok_ident->ident;
-    tok_ident->ident = nullptr;
+    own(func_decl->ret_type, tok_ident->ident);
+    
+    func_decl->type_ident_p = tok_ident->p;
+    func_decl->type_ident_end_p = tok_ident->end_p;
+    
 
     func_decl->header_end_p = tok_ident->end_p;
     match(TokenType::Ident);

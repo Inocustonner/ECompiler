@@ -30,6 +30,13 @@ ident = ( letter, "_" ), [ ( letter | digit | "_") ];
 
 tl = ";"; (*terminal*)
 
+(* /////////////// IDENT /////////////// *)
+v_ident = [ "*" ], ident, [ "[", expr, "]" ]; (* v_ident(var_ident) - ident with modificators that is used in expressions*)
+t_ident = [("*" | "[", expr, "]")]; (* t_ident(type_ident) - ident with modificators used in type declorations *)
+
+deref = "*";
+array_access = "[", expr, "]";
+
 (* /////////////// DECLS /////////////// *)
 
 vardecl = ident, ":", ident, tl

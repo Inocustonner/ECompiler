@@ -46,6 +46,8 @@ Reporter::Reporter(const char* file_name) {
 }
 
 void Reporter::report_error(ReportMeta meta, const char *format, ...) const {
+  errors += 1;
+
   printf("%s\n", file.c_str());
   printf("error C%0.4x: ", static_cast<int>(meta.error));
 
@@ -64,7 +66,7 @@ void Reporter::report_error(ReportMeta meta, const char *format, ...) const {
 
 std::string Reporter::print_hl(ulong p, ulong end_p) const {
   std::string line;
-  size_t len = end_p - p;
+  size_t len = end_p - p + 1;
 
   line.resize(len);
   is.seekg(p, is.beg);

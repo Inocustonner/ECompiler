@@ -82,6 +82,7 @@ struct AstFuncDecl : public Ast {
   std::string *ret_type;
   AstStmtBlock *stmt_block;
   ulong header_end_p;
+  ulong type_ident_p, type_ident_end_p;
 };
 
 struct AstStmtBlock : public Ast {

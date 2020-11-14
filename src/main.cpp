@@ -4,6 +4,7 @@
 
 #define LEXER_FILE_SUFFIX ".elex"
 #define PARSER_FILE_SUFFIX ".eparse.xml"
+#define IRPASCAL_FILE_SUFFIX ".irpascal"
 
 bool g_verbose = false;
 
@@ -21,6 +22,9 @@ void set_parser_args(cli::Parser &parser) {
   SET_OPT_NA(bool, "out-parse", false,
              "Run parser and produce ast output to "
              "<CompilationUnit>." PARSER_FILE_SUFFIX " assosiated files");
+  SET_OPT_NA(bool, "out-irpascal", false,
+             "Run IRPascal and produce verbose output to "
+             "<CompilationUnit>" IRPASCAL_FILE_SUFFIX " associated files");
   SET_OPT(bool, "v", "verbose", false, "Show verbose output");
 #undef SET_OPT_NA
 #undef SET_REQ
@@ -31,6 +35,7 @@ template <typename... Args> void printfv(Args &&...args) {
   if (g_verbose)
     printf(args...);
 }
+
 
 void runLexer(const std::vector<std::string> &input) {
   for (const auto &file : input) {
@@ -68,16 +73,47 @@ void runParser(const std::vector<std::string> &input) {
       printf("Couldn't create/open file %s for writing\n", out_path.c_str());
       continue;
     }
-    
+
     printfv("Running parser for %s...\n", file.c_str());
     Parser parser{file.c_str()};
 
-    Ast* ast = parser.parse();
+    Ast *ast = parser.parse();
     const std::string output = serializeAstXml(ast);
     freeAst(ast);
-    
+
     fwrite(output.c_str(), output.length(), 1, f);
-    
+
+    printfv("[Done]\n");
+    fclose(f);
+  }
+}
+
+void runIRPascal(const std::vector<std::string>& input) {
+  for (const auto& file : input) {
+    std::string irp_path = file + IRPASCAL_FILE_SUFFIX;
+
+    FILE* f = fopen(irp_path.c_str(), "wb");
+    if (f == NULL) {
+      printf("Couldn't create/open file %s for writing\n", irp_path.c_str());
+      continue;
+    }
+    printfv("Running parser for %s...\n", file.c_str());
+    Parser parser{ file.c_str() };
+
+    error::Reporter reporter(file.c_str());
+
+    Ast* ast = parser.parse();
+    printfv("Running IRPascalProducer for %s...\n", file.c_str());
+    IRPascalProducer producer{ reporter };
+    auto node = producer.produce(ast);
+
+    if (reporter.errors == 0) {
+      std::string output = serializeIRP(node.get());
+
+      fwrite(output.c_str(), output.length(), 1, f);
+    }
+
+
     printfv("[Done]\n");
     fclose(f);
   }
@@ -101,7 +137,11 @@ int main(int argc, char **argv) {
       runParser(input);
       return 0;
     }
-  }  catch (error::ParserError &e) {
+    else if (GET_FLAG("out-irpascal")) {
+      runIRPascal(input);
+      return 0;
+    }
+  } catch (error::ParserError &e) {
     printf("(from:%d, to:%d) %s\n", e.meta().p, e.meta().end_p, e.what());
   } catch (error::LexerError &e) {
     printf("(line: %d, col: %d) %s\n", e.meta().line, e.meta().col, e.what());

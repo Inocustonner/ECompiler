@@ -52,6 +52,7 @@ enum class SymbolType {
 
 struct IRPSymbol {
   SymbolType sym_type;
+  std::unique_ptr<std::string> ident;
 
   ulong p = 0;
   ulong end_p = 0;
@@ -59,27 +60,24 @@ struct IRPSymbol {
 
 struct IRPSymbolVar: public IRPSymbol {
   SymbolCONS(Var);
-  std::unique_ptr<std::string> ident;
   Type var_type;
 };
 
 struct IRPSymbolArg: public IRPSymbol {
   SymbolCONS(Arg);
-  std::unique_ptr<std::string> ident;
   Type var_type;
 };
 
 struct IRPSymbolType: public IRPSymbol {
   SymbolCONS(Type);
-  std::unique_ptr<std::string> ident;
   Type var_type;
 };
 
 struct IRPascalNodeFunc;
 struct IRPSymbolFunc: public IRPSymbol {
   SymbolCONS(Func);
-  std::unique_ptr<std::string> ident;
-  IRPascalNodeFunc irp_func;
+  ptr_view<IRPascalNodeFunc> irp_func = nullptr;
+  Type ret_type;
 };
 
 using PasSymTable = SymbolTable::SymbolTableIntrl<IRPSymbol*>;
