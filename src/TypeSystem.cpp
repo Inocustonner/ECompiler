@@ -1,7 +1,7 @@
 #include "TypeSystem.hpp"
 #include "Compiler.hpp"
 #include <cassert>
-#include <magic_enum>
+#include <magic_enum.hpp>
 
 #define TO_BITS(byte) byte * 8
 

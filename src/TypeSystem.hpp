@@ -1,4 +1,5 @@
 #pragma once
+#include "types.hpp"
 #include <string>
 #include <vector>
 
@@ -35,7 +36,7 @@ namespace Type {
   bool isBuiltIns(Metas&&... metas) {
     std::array<const Meta*, sizeof...(Metas)> ms = {metas...};
     for (const Meta* meta : ms) {
-      if (!magic_enum::enum_contains<BuiltIn>(meta->type_id)) return false;
+      if (!magic_enum::enum_contains((BuiltIn)meta->type_id)) return false;
     }
     return true;
   }

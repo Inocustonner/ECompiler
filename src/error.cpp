@@ -124,6 +124,6 @@ std::string Reporter::format_error(ulong p, ulong end_p) const {
   std::string precc_lines= readBackwards(p);
   const char end_line_char = '\n';
   size_t lines_up = std::count(precc_lines.begin(), precc_lines.end(), end_line_char);
-  size_t first_line = getLineFromPos(p) - lines_up;
+  //size_t first_line = getLineFromPos(p) - lines_up;
   return SET_FOREGROUND_COLOR(precc_lines) + SET_FOREGROUND_COLOR(UNDERLINE_STRING(line)) + SET_FOREGROUND_COLOR(readForward(end_p));
 }

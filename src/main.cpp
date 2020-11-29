@@ -104,7 +104,8 @@ void runIRPascal(const std::vector<std::string> &input) {
     }
     printfv("Running parser for %s...\n", file.c_str());
     error::Reporter reporter(file.c_str());
-    Parser parser{file.c_str(), reporter};
+    Lexer lex{ file.c_str(), reporter };
+    Parser parser{ lex, reporter };
 
     Ast *ast = parser.parse();
     printfv("Running IRPascalProducer for %s...\n", file.c_str());
