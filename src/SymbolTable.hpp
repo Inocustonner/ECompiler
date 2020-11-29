@@ -1,4 +1,6 @@
 #pragma once
+#include "types.hpp"
+
 #include <string_view>
 #include <memory>
 
@@ -60,24 +62,24 @@ struct IRPSymbol {
 
 struct IRPSymbolVar: public IRPSymbol {
   SymbolCONS(Var);
-  Type var_type;
+  std::unique_ptr<Type::Meta> var_type;
 };
 
 struct IRPSymbolArg: public IRPSymbol {
   SymbolCONS(Arg);
-  Type var_type;
+  std::unique_ptr<Type::Meta> var_type;
 };
 
 struct IRPSymbolType: public IRPSymbol {
   SymbolCONS(Type);
-  Type var_type;
+  std::unique_ptr<Type::Meta> var_type;
 };
 
 struct IRPascalNodeFunc;
 struct IRPSymbolFunc: public IRPSymbol {
   SymbolCONS(Func);
   ptr_view<IRPascalNodeFunc> irp_func = nullptr;
-  Type ret_type;
+  std::unique_ptr<Type::Meta> ret_type;
 };
 
 using PasSymTable = SymbolTable::SymbolTableIntrl<IRPSymbol*>;

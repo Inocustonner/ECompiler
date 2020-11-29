@@ -1,5 +1,5 @@
 #pragma once
-
+#define LEXER
 using CharT = char;
 using StringT = std::basic_string<CharT>;
 
@@ -35,6 +35,7 @@ enum class TokenType {
   Minus,    // -
   Asterisk, // *
   Slash,    // /
+  Ampersand // &
 };
 
 struct Token {
@@ -68,7 +69,7 @@ void freeToken(Token *tok);
 std::string serializeToken(PToken token);
 
 struct Lexer {
-  Lexer(const char *file_path);
+  Lexer(const char *file_path, error::Reporter& reporter);
 
   ~Lexer();
   Token *next_token();
@@ -85,6 +86,8 @@ private:
   CharT curr;
   long p = -1;
   long line = 1, col = 0;
+
+  error::Reporter& reporter;
 };
 
 namespace error {

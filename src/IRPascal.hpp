@@ -1,4 +1,14 @@
 #pragma once
+#ifdef USE_IRPASCAL
+#include "TypeSystem.hpp"
+#include "SymbolTable.hpp"
+
+#ifndef ERROR_REPORTER
+namespace error {
+  struct Reporter;
+}
+#endif
+
 // #include "Typing.hpp"
 
 #define IRPascalNodeCONS(type)                                                 \
@@ -12,6 +22,7 @@ enum class IRPascalNodeType {
   Const,
 
   Mutate,
+  Cast,
   Return
 };
 
@@ -24,7 +35,7 @@ enum class IRMutation {
   Assign
 };
 
-enum class IRConst { Int, String, Char };
+using TypePtr = ptr_opt_own<Type::Meta>;
 
 struct IRPascalNode {
   IRPascalNodeType node_type;
@@ -40,20 +51,26 @@ struct IRPascalNodeVar : public IRPascalNode {
   IRPascalNodeCONS(Var);
   long id = -1;
   ptr_view<IRPSymbol> sym = nullptr; // must not be freed
-  Type var_type;
+  TypePtr var_type;
 };
 
 struct IRPascalNodeConst : public IRPascalNode {
   IRPascalNodeCONS(Const);
-  Type const_type;
+  TypePtr const_type;
   union {
     std::string *str;
+    void* pointer;
     long integer;
     char ch;
-  };
+  }un_value;
 };
 
-// maybe somehow generalize NodeMutate to put return in??
+struct IRPascalNodeCast: public IRPascalNode {
+  IRPascalNodeCONS(Cast);
+  std::unique_ptr<IRPascalNode> src;
+  TypePtr to_type;
+};
+
 struct IRPascalNodeReturn : public IRPascalNode {
   IRPascalNodeCONS(Return);
   std::unique_ptr<IRPascalNodeVar> ret = nullptr;
@@ -62,9 +79,9 @@ struct IRPascalNodeReturn : public IRPascalNode {
 struct IRPascalNodeMutate : public IRPascalNode {
   IRPascalNodeCONS(Mutate);
   IRMutation mutation;
-  std::unique_ptr<IRPascalNode> dst = nullptr; // IRPascalVar or IRPascalTemp
+  std::unique_ptr<IRPascalNode> dst = nullptr;
   std::unique_ptr<IRPascalNode> src = nullptr;
-  Type var_type;
+  TypePtr var_type;
 };
 
 struct IRPascalNodeBlock : public IRPascalNode {
@@ -84,6 +101,16 @@ struct IRPascalNodeFunc : public IRPascalNode {
 
 std::string serializeIRP(IRPascalNode *node);
 void freeIRP(IRPascalNode *node);
+
+#ifndef PARSER
+struct Ast;
+struct AstExpr;
+#endif
+
+enum class CastType {
+  Implicit,
+  Excplicit
+};
 
 struct IRPascalProducer {
   struct Env {
@@ -109,18 +136,24 @@ struct IRPascalProducer {
   void correctBasicNodeMutate(IRPascalNodeMutate *&mut, AstExpr* expr);
   _NODISCARD
   std::unique_ptr<IRPascalNodeMutate>
-  createArithmeticMutation(AstExpr *expr, IRMutation mutation);
+  produceDefaultExprMutation(AstExpr *expr, IRMutation mutation);
   _NODISCARD
-  std::unique_ptr<IRPascalNodeMutate> createAssignMutation(
+  std::unique_ptr<IRPascalNodeMutate> produceAssignMutation(
       std::unique_ptr<IRPascalNode> &&dst, std::unique_ptr<IRPascalNode> &&src,
       Ast *ast_with_assignment); /* All unique_ptrs will be std::move'd, create
                                     a copy of the resource if you want to keep
                                     it valid */
+  std::unique_ptr<IRPascalNode>
+  produceCast(std::unique_ptr<IRPascalNode>&& casted, ptr_view<Type::Meta> to_type, CastType cast_type = CastType::Implicit);
+  void fixMutationOperands(IRPascalNodeMutate& mut_node, Ast* ast);
+  std::unique_ptr<IRPascalNode> produceOperand(AstExpr*& ast_oper);
   void produceExpr(Ast /*Expr*/ *&ast_expr,
                    std::unique_ptr<IRPascalNode> *dst = nullptr);
   void produceReturn(Ast /*Return*/ *&ast_ret);
 
 private:
+  void pushStmt(std::unique_ptr<IRPascalNode>&& stmt);
+
   void pushEnv();
   void popEnv();
   
@@ -133,7 +166,7 @@ private:
   bool ensureUndeclared(std::string_view ident, Ast *ast_assoc,
                         bool local = true);
 
-  IRPascalNodeVar *pushTemp(Type temp_type);
+  IRPascalNodeVar *pushTemp(TypePtr temp_type);
   void popTemp();
 
   // analysis errors
@@ -153,19 +186,20 @@ private:
   void errorNotAType(ulong region_start, ulong region_end,
                      ulong type_ident_location_p,
                      ulong type_ident_location_end_p, std::string_view ident,
-                     Type orginal_var_type);
+    ptr_view<Type::Meta> orginal_var_type);
 
   void errorAssignmentToConst(ulong region_start, ulong region_end);
 
-  void errorInvalidCast(ulong region_start, ulong region_end, Type dst_type,
-                        Type src_type);
+  void errorInvalidCast(ulong region_start, ulong region_end, ptr_view<Type::Meta> dst_type,
+    ptr_view<Type::Meta> src_type);
 };
-
-namespace error {
-struct IRPError : error::Error {
-  IRPError(IRPascalNode irp, const char *format, ...);
-  IRPError(IRPascalNode *irp, const char *format, ...);
-  IRPascalNode meta();
-  IRPascalNode m_irp;
-};
-} // namespace error
+//
+//namespace error {
+//struct IRPError : error::Error {
+//  IRPError(IRPascalNode irp, const char *format, ...);
+//  IRPError(IRPascalNode *irp, const char *format, ...);
+//  IRPascalNode meta();
+//  IRPascalNode m_irp;
+//};
+// } // namespace error
+#endif

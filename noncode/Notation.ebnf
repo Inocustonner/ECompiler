@@ -26,23 +26,20 @@ ascii_char = ? ascii_char ?;
 char = "'", ascii_char, "'";
 string = '"', { ascii_char }, '"';
 
-ident = ( letter, "_" ), [ ( letter | digit | "_") ];
+
 
 tl = ";"; (*terminal*)
 
 (* /////////////// IDENT /////////////// *)
-v_ident = [ "*" ], ident, [ "[", expr, "]" ]; (* v_ident(var_ident) - ident with modificators that is used in expressions*)
-t_ident = [("*" | "[", expr, "]")]; (* t_ident(type_ident) - ident with modificators used in type declorations *)
-
-deref = "*";
-array_access = "[", expr, "]";
+ident = ( letter, "_" ), [ ( letter | digit | "_") ];
+t_ident = [(deref | seq_access)], ident; (* t_ident(type_ident) - ident with modificators used in type declorations *)
 
 (* /////////////// DECLS /////////////// *)
 
-vardecl = ident, ":", ident, tl
-        | ident, ":", ident, "=", expr, tl;
+vardecl = ident, ":", t_ident, tl
+        | ident, ":", t_ident, "=", expr, tl;
 
-funcdecl = ident, "::", "(",(ident,":" ident , ",", [ident, ":", ident])? ")", ident?,
+funcdecl = ident, "::", "(",(ident,":" t_ident , ",", [ident, ":", t_ident])? ")", t_ident?,
            block;
 		   
 return = "return", (expr)?, tl
@@ -55,7 +52,16 @@ block = "{", [stmt], "}";
 stmt = { ( vardecl | funcdecl | (expr, tl) | return  ) };
 
 (* /////////////// EXPR /////////////// *)
-
-expr = term, [ sign, term ];
+expr = expr_arith, "=", expr_arith;
+expr_arith = term, [ sign, term ];
 term = factor, [ tsign, factor ];
-factor = number | ( "(", expr, ")" );
+factor = ident 
+	   |seq_access
+	   |number 
+	   |( "(", expr, ")" ) 
+	   |deref 
+	   |addr_of;
+	   
+deref = "*", expr;
+addr_of = "&", expr;
+seq_access = "[", expr, "]";

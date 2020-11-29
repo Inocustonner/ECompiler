@@ -8,7 +8,7 @@
   (ident)->line = line;                                                        \
   (ident)->col = col;                                                          \
   (ident)->tok = tok_type_enum;
-#define CONST_LEN(arr) (sizeof(arr)/sizeof(*arr))
+#define CONST_LEN(arr) (sizeof(arr) / sizeof(*arr))
 static bool isVarChar(CharT c, bool include_numbers = false) {
   return IN_RANGE_INCL('a', c, 'z') || IN_RANGE_INCL('A', c, 'Z') ||
          (c == '_') || (include_numbers && IN_RANGE_INCL('0', c, '9'));
@@ -69,7 +69,8 @@ std::string serializeToken(PToken token) {
   return seril;
 }
 #ifndef USE_CPP_STREAM
-Lexer::Lexer(const char *file_path) {
+Lexer::Lexer(const char *file_path, error::Reporter &reporter)
+    : reporter{reporter} {
   fopen_s(&file_p, file_path, "rb");
   if (file_p == nullptr) {
     throw error::Error("Unnable to open %s file", file_path);
@@ -78,8 +79,9 @@ Lexer::Lexer(const char *file_path) {
 }
 Lexer::~Lexer() { fclose(file_p); }
 #else
-Lexer::Lexer(const char *file_path) {
-  file_s.open(file_path, std::ifstream::in);
+Lexer::Lexer(const char *file_path, error::Reporter& reporter) 
+  : reporter{ reporter } {
+  file_s.open(file_path, std::ifstream::in | std::ifstream::binary);
   if (!file_s.is_open()) {
     throw error::Error("Unnable to open %s file", file_path);
   }
@@ -96,6 +98,7 @@ void Lexer::advance() {
 #endif
   if (curr != EOF) {
     p += 1;
+    // assert(p == file_s.tellg());
     col += 1;
     if (curr == '\n') {
       line += 1;
@@ -134,7 +137,7 @@ Token *Lexer::next_token() {
     TOKEN_MATCH_RETURN(',', TokenType::Comma);
 
     TOKEN_MATCH_RETURN('[', TokenType::OBracket);
-    TOKEN_MATCH_RETURN(']', TokenType::OBracket);
+    TOKEN_MATCH_RETURN(']', TokenType::CBracket);
     TOKEN_MATCH_RETURN('{', TokenType::OBracer);
     TOKEN_MATCH_RETURN('}', TokenType::CBracer);
     TOKEN_MATCH_RETURN('(', TokenType::OParen);
@@ -145,6 +148,7 @@ Token *Lexer::next_token() {
     TOKEN_MATCH_RETURN('*', TokenType::Asterisk);
     TOKEN_MATCH_RETURN('/', TokenType::Slash);
     TOKEN_MATCH_RETURN('=', TokenType::Eq);
+    TOKEN_MATCH_RETURN('&', TokenType::Ampersand);
 
   case '\'': {
     TokenChar *token = new TokenChar;
@@ -173,11 +177,18 @@ Token *Lexer::next_token() {
             return ' ';
           }
         };
+        reporter.report_error(
+            {error::ErrorEnum::Unexpected_Char, (ulong)p, (ulong)p + 1},
+            "unexcpected character \\'%c'(0x%0.2x) , excpected \"%c\"",
+            space_snd_char(curr), (unsigned)curr, '\'');
         throw error::LexerError(
             *token, "Unexpected character \\'%c'(0x%0.2x) , excpected \"%c\"",
             space_snd_char(curr), (unsigned)curr, '\'');
 
       } else {
+        reporter.report_error({error::ErrorEnum::Unexpected_Char, (ulong)p, (ulong)p + 1},
+                              "Unexpected character '%c', excpected '%c'",
+                              (unsigned)curr, '\'');
         throw error::LexerError(
             *token, "Unexpected character '%c', excpected '%c'", curr, '\'');
       }
@@ -244,6 +255,9 @@ Token *Lexer::next_token() {
         if (isdigit(curr)) {
           // check boundaries
           if (octal && CHAR_DIGIT_TO_I(curr) >= 8) {
+            reporter.report_error(
+                {error::ErrorEnum::Unexpected_Char, (ulong)p, (ulong)p + 1},
+                "Character '%c' doesn't belong to octal digits", curr);
             throw error::LexerError(
                 *token, "Character '%c' doesn't belong to octal digits", curr);
           }
@@ -252,6 +266,12 @@ Token *Lexer::next_token() {
         } else if (auto hnumber = hexalphanumber(curr); hnumber != -1 && hex) {
           number = number * exp + hnumber;
         } else {
+          reporter.report_error({error::ErrorEnum::Unexpected_Char, (ulong)p, (ulong)p + 1},
+                                "Character '%c' doesn't belong to %s numbers",
+                                curr,
+                                decimal ? "decimal"
+                                : hex   ? "hex"
+                                        : "octal");
           throw error::LexerError(
               *token, "Character '%c' doesn't belong to %s numbers", curr,
               decimal ? "decimal"
@@ -295,12 +315,17 @@ Token *Lexer::next_token() {
     } else {
       Token tok;
       INIT_TOKEN(&tok, TokenType::Eof);
+      reporter.report_error({error::ErrorEnum::Unexpected_Eof},
+                            "Unexpected character \"%c\"(0x%x)", curr,
+                            (unsigned)curr);
       throw error::LexerError(tok, "Unexpected character \"%c\"(0x%x)", curr,
                               (unsigned)curr);
     }
   }
   Token tok;
   INIT_TOKEN(&tok, TokenType::Eof);
+  reporter.report_error({error::ErrorEnum::Unexpected_Eof},
+                        "Unexpected end of file");
   throw error::LexerError(tok, "Unexpected end of file");
 }
 

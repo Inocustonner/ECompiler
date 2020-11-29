@@ -27,7 +27,6 @@
 
 extern bool g_verbose;
 
-
 void freeAst(Ast* ast) {
   switch (ast->ast) {
   case AstType::StmtBlock: {
@@ -66,18 +65,21 @@ void freeAst(Ast* ast) {
     }break;
     }
   }break;
+  case AstType::VarType: {
+    CAST_INIT_AST(var_type, VarType);
+    DELETE_NOT_NULL(var_type->type_ident);
+  }break;
 
   case AstType::VarDecl: {
     CAST_INIT_AST(var_decl, VarDecl);
     if (var_decl->init_expr)
       freeAst(var_decl->init_expr);
     
-    if (var_decl->ident)
-      delete var_decl->ident;
+    DELETE_NOT_NULL(var_decl->ident);
     var_decl->ident = nullptr;
     
-    DELETE_NOT_NULL(var_decl->type_ident);
-    var_decl->type_ident = nullptr;
+    freeAst(var_decl->var_type);
+    var_decl->var_type = nullptr;
   }break;
     
   case AstType::FuncDecl: {
@@ -99,9 +101,9 @@ void freeAst(Ast* ast) {
   case AstType::FuncArg: {
     CAST_INIT_AST(func_arg, FuncArg);
     delete func_arg->ident;
-    delete func_arg->type_ident;
+    freeAst(func_arg->var_type);
     func_arg->ident = nullptr;
-    func_arg->type_ident = nullptr;
+    func_arg->var_type = nullptr;
   }break;
     
   case AstType::Return: {
@@ -134,7 +136,7 @@ std::string serializeAstXml(const Ast *ast) {
     CAST_INIT_CONST_AST(func_decl, FuncDecl);
     block += XML_TAG("header_end_p") + std::to_string(func_decl->header_end_p) + XML_TAG("/header_end_p");
     if (func_decl->ret_type) {
-      block += XML_TAG("ret_type") + *func_decl->ret_type + XML_TAG("/ret_type");      
+      block += XML_TAG("ret_type") + serializeAstXml(func_decl->ret_type) + XML_TAG("/ret_type");
     }
     block += XML_TAG("Arguments");
     for (const AstFuncArg *arg : func_decl->args) {
@@ -147,15 +149,31 @@ std::string serializeAstXml(const Ast *ast) {
   case AstType::FuncArg: {
     CAST_INIT_CONST_AST(func_arg, FuncArg);
     block += XML_TAG("ident") + *func_arg->ident + XML_TAG("/ident");
-    block +=
-        XML_TAG("type_ident") + *func_arg->type_ident + XML_TAG("/type_ident");
+    block += serializeAstXml(func_arg->var_type);
+        
   } break;
+  case AstType::VarType: {
+    CAST_INIT_CONST_AST(var_type, VarType);
+    for (const auto& mod : var_type->mods) {
+      switch (mod.mod) {
+      case TypeModEnum::Ptr: {
+        block += XML_TAG("Ptr/");
+      }break;
+      case TypeModEnum::Array: {
+        block += XML_TAG("Brackets") + (mod.expr ? serializeAstXml(mod.expr) : "") + XML_TAG("/Brackets");
+      }break;
+      default:
+        throw error::Error("Unexpected TypeModEnum::%s(%d)", magic_enum::enum_name(mod.mod), static_cast<int>(mod.mod));
+      }
+    }
+    block += XML_TAG("type_ident") + *var_type->type_ident + XML_TAG("/type_ident");
+  }break;
 
   case AstType::VarDecl: {
     CAST_INIT_CONST_AST(var_decl, VarDecl);
     block += XML_TAG("ident") + *var_decl->ident + XML_TAG("/ident");
     block +=
-        XML_TAG("type_ident") + *var_decl->type_ident + XML_TAG("/type_ident");
+        serializeAstXml(var_decl->var_type);
     if (var_decl->init_expr) {
       block += XML_TAG("init_expr");
       block += serializeAstXml(var_decl->init_expr);
@@ -191,7 +209,7 @@ std::string serializeAstXml(const Ast *ast) {
 #undef XML_TAG
 }
 
-Parser::Parser(const char *file_path) : m_lex{file_path} {
+Parser::Parser(Lexer& lex, error::Reporter& reporter) : m_lex{ lex }, reporter{reporter} {
   for (ulong i = 0; i < LL_N; i++) {
     tok_buffer.array[i] = m_lex.next_token();
   }
@@ -229,10 +247,9 @@ void Parser::match(TokenType type) {
   if (type == peek(0)) {
     advance();
   } else {
-    Ast err_meta = {};
-    err_meta.p = lookUp(0)->p;
-    err_meta.end_p = lookUp(0)->p;
-    throw error::ParserError(err_meta, "Unexpected token %s",
+    reporter.report_error({error::ErrorEnum::Unexpected_Token, (ulong)lookUp(0)->p, (ulong)lookUp(0)->end_p }, "Unexpected token %s, expected %s", magic_enum::enum_name(peek(0)).data(),
+    magic_enum::enum_name(type).data());
+    throw error::Error("Unexpected token %s",
                              magic_enum::enum_name(peek(0)).data());
   }
 }
@@ -283,13 +300,7 @@ PARSING_METHOD varDecl() {
 
   tok_ident = static_cast<TokenIdent *>(*plookUp(0));
 
-  var_decl->type_ident = tok_ident->ident;
-  tok_ident->ident = nullptr;
-  
-  var_decl->type_ident_p = tok_ident->p;
-  var_decl->type_ident_end_p = tok_ident->end_p;
-  
-  match(TokenType::Ident);
+  var_decl->var_type = varType();
 
   if (peek(0) == TokenType::Eq) {
     match(TokenType::Eq);
@@ -322,13 +333,8 @@ PARSING_METHOD funcDecl() {
     match(TokenType::Colon);
 
     tok_ident = static_cast<TokenIdent *>(*plookUp(0));
-    func_arg->type_ident = tok_ident->ident;
-    tok_ident->ident = nullptr;
-    func_arg->end_p = tok_ident->end_p;
-    
-    func_arg->type_ident_p = tok_ident->p;
-    func_arg->type_ident_end_p = tok_ident->end_p;
-    match(TokenType::Ident);
+    func_arg->var_type = varType();
+    func_arg->end_p = func_arg->var_type->end_p;
 
     func_decl->args.push_back(func_arg);
     
@@ -344,10 +350,8 @@ PARSING_METHOD funcDecl() {
       match(TokenType::Colon);
 
       tok_ident = static_cast<TokenIdent *>(*plookUp(0));
-      func_arg->type_ident = tok_ident->ident;
-      tok_ident->ident = nullptr;
-      func_arg->end_p = tok_ident->end_p;
-      match(TokenType::Ident);
+      func_arg->var_type = varType();
+      func_arg->end_p = func_arg->var_type->end_p;
 
       func_decl->args.push_back(func_arg);
     }
@@ -355,21 +359,43 @@ PARSING_METHOD funcDecl() {
   func_decl->header_end_p = tok_ident->end_p;
   match(TokenType::CParen);
 
-  if (peek(0) == TokenType::Ident) {
+  if (peek(0) != TokenType::OBracer) {
     tok_ident = static_cast<TokenIdent *>(*plookUp(0));
-    own(func_decl->ret_type, tok_ident->ident);
-    
-    func_decl->type_ident_p = tok_ident->p;
-    func_decl->type_ident_end_p = tok_ident->end_p;
-    
-
-    func_decl->header_end_p = tok_ident->end_p;
-    match(TokenType::Ident);
+    func_decl->ret_type = varType();
+    func_decl->header_end_p = func_decl->ret_type->end_p;
   }
   
   func_decl->stmt_block = stmtBlock();
   func_decl->end_p = func_decl->stmt_block->end_p;
   return func_decl;
+}
+
+
+AstVarType* Parser::varType() {
+  INIT_AST(type, VarType);
+  while (peek(0) != TokenType::Ident) {
+    if (peek(0) == TokenType::Asterisk) {
+      match(TokenType::Asterisk);
+      AstVarType::TypeMod mod = { .mod = TypeModEnum::Ptr };
+      type->mods.push_back(mod);
+    } else if (peek(0) == TokenType::OBracket) {
+      AstVarType::TypeMod mod = { TypeModEnum::Array};
+      if (peek(1) == TokenType::CBracket) {
+        match(TokenType::OBracket);
+        match(TokenType::CBracket);
+      } else { // if expr beetween bracktest
+        mod.expr = factor(); // factor knows how to handle it
+      }
+      type->mods.push_back(mod);
+    } else {
+      reporter.report_error({ error::ErrorEnum::Invalid_Type_Modifier, static_cast<ulong>(lookUp(0)->p), static_cast<ulong>(lookUp(0)->end_p) }, "Invalid type modifier %s", magic_enum::enum_name(peek(0)));
+      break; // will cause error on the following ident match
+    }
+  }
+  own(type->type_ident, static_cast<TokenIdent*>(lookUp(0))->ident);
+  type->end_p = lookUp(0)->end_p;
+  match(TokenType::Ident);
+  return type;
 }
 
 PARSING_METHOD returnStmt() {
@@ -510,37 +536,53 @@ PARSING_METHOD_EXPR factor() {
     match(TokenType::String);
     return factor_string;
   }
+  case TokenType::Ampersand: {
+    INIT_AST_EXPR(factor_addrof, AddrOf);
+    match(TokenType::Ampersand);
+    factor_addrof->expr = expr();
+    return factor_addrof;
+  }
+  case TokenType::Asterisk: {
+    INIT_AST_EXPR(factor_deref, DeRef);
+    match(TokenType::Asterisk);
+    factor_deref->expr = expr();
+    return factor_deref;
+  }
+  case TokenType::OBracket: {
+    INIT_AST_EXPR(factor_seq_acc, SeqAccess);
+    match(TokenType::OBracket);
+    factor_seq_acc->expr = expr();
+    match(TokenType::CBracket);
+    return factor_seq_acc;
+  }
   default:
-    Ast error_ast = {};
-    error_ast.p = lookUp(0)->p;
-    error_ast.end_p = lookUp(0)->end_p;
-
-    throw error::ParserError(error_ast, "Unexpected token %s",
+    reporter.report_error({ error::ErrorEnum::Unexpected_Token, (ulong)lookUp(0)->p, (ulong)lookUp(0)->end_p }, "Unexcpected token %s", magic_enum::enum_name(peek(0)).data());
+    throw error::Error("Unexpected token %s",
                              magic_enum::enum_name(peek(0)).data());
   }
 }
-
-namespace error {
-ParserError::ParserError(Ast ast, const char *format, ...) {
-  va_list args;
-  va_start(args, format);
-
-  this->make_msg(format, args);
-  this->ast = ast;
-
-  va_end(args);
-}
-
-ParserError::ParserError(Ast *ast_, const char *format, ...) {
-  va_list args;
-  va_start(args, format);
-
-  this->make_msg(format, args);
-  this->ast = *ast_;
-  delete ast_;
-
-  va_end(args);
-}
-
-Ast ParserError::meta() const { return ast; }
-} // namespace error
+//
+//namespace error {
+//ParserError::ParserError(Ast ast, const char *format, ...) {
+//  va_list args;
+//  va_start(args, format);
+//
+//  this->make_msg(format, args);
+//  this->ast = ast;
+//
+//  va_end(args);
+//}
+//
+//ParserError::ParserError(Ast *ast_, const char *format, ...) {
+//  va_list args;
+//  va_start(args, format);
+//
+//  this->make_msg(format, args);
+//  this->ast = *ast_;
+//  delete ast_;
+//
+//  va_end(args);
+//}
+//
+//Ast ParserError::meta() const { return ast; }
+//} // namespace error
