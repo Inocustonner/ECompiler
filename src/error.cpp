@@ -1,9 +1,9 @@
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <cassert>
 #include <cstdarg>
 #include <cstdio>
-
 #include "types.hpp"
 #include "error.hpp"
 
@@ -72,6 +72,10 @@ size_t Reporter::seekToLineBeg(long skip_lines) const {
     is.unget();
     is.seekg(-1, is.cur);
   }
+
+  if (is.tellg() != 0) {
+    is.seekg(2, is.cur);
+  }
   return p - is.tellg();
 }
 
@@ -81,12 +85,9 @@ std::string Reporter::readBackwards(ulong p) const {
   std::string line = "";
   is.seekg(p, is.beg);
   size_t len = seekToLineBeg(additional_lines_above);
-  if (is.tellg() != 0) {
-    line += "...\n";
-  }
   if (len > 0) {
     line.resize(len);
-    is.read(line.data(), len);    
+    is.read(line.data(), len);
   }
   return line;
 }
@@ -102,7 +103,17 @@ std::string Reporter::readForward(ulong p) const {
     std::getline(is, tmp);
     line += tmp + '\n';
   }
-  if (!is.eof() && is.gcount() != 1) line += "...";
+  return line;
+}
+
+size_t Reporter::getLineFromPos(size_t p) const {
+  size_t curr_pos = is.tellg();
+  is.seekg(0, is.beg);
+  size_t line = 0;
+  while (is.tellg() < p) {
+    line += 1;
+    is.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+  }
   return line;
 }
 
@@ -120,10 +131,21 @@ std::string Reporter::format_error(ulong p, ulong end_p) const {
 #define ESC(seq) "\33[" _TO_STR(seq) "m"
 #define RGB(r,g,b) r;g;b
 #define UNDERLINE_STRING(str) ESC(48;2;RGB(170,45,27)) ESC(4) + str + ESC(0)
-#define SET_FOREGROUND_COLOR(str) ESC(38;2;RGB(122,110,128)) + str + ESC(0) 
+#define SET_FOREGROUND_COLOR(str) /*ESC(38;2;RGB(150,150,150)) + */str/* + ESC(0) */
   std::string precc_lines= readBackwards(p);
+
   const char end_line_char = '\n';
   size_t lines_up = std::count(precc_lines.begin(), precc_lines.end(), end_line_char);
-  //size_t first_line = getLineFromPos(p) - lines_up;
-  return SET_FOREGROUND_COLOR(precc_lines) + SET_FOREGROUND_COLOR(UNDERLINE_STRING(line)) + SET_FOREGROUND_COLOR(readForward(end_p));
+  size_t curr_line = getLineFromPos(p) - lines_up;
+  
+  std::string colored = SET_FOREGROUND_COLOR(precc_lines) + SET_FOREGROUND_COLOR(UNDERLINE_STRING(line)) + SET_FOREGROUND_COLOR(readForward(end_p));
+  std::string result = "";
+  size_t prefix_len = (size_t)std::log10(curr_line) + 3;
+  std::istringstream input;
+  input.str(colored);
+  for (std::string line; std::getline(input, line);) {
+    auto line_n = std::to_string(curr_line++);
+    result += line_n + std::string(prefix_len - std::size(line_n), ' ') + line + "\n";
+  }
+  return result;
 }

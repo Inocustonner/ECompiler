@@ -1,4 +1,5 @@
 #pragma once
+#include <magic_enum.hpp>
 #include "types.hpp"
 #include <string>
 #include <vector>

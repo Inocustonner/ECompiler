@@ -1,7 +1,6 @@
 #include "TypeSystem.hpp"
 #include "Compiler.hpp"
 #include <cassert>
-#include <magic_enum.hpp>
 
 #define TO_BITS(byte) byte * 8
 
@@ -15,7 +14,8 @@ constexpr size_t type_size_table[builtin_types_cnt] = {
 
 namespace Type {
   std::string Meta::getFullTypeName() const noexcept {
-    return name + (subtype ? subtype->getFullTypeName() : "");
+    std::string ret = name + (subtype ? subtype->getFullTypeName() : "");
+    return ret;
   }
 
   size_t Meta::getTypeSize() const noexcept {
@@ -47,7 +47,7 @@ namespace Type {
   }
 
   bool Meta::equal(const Meta &meta) const noexcept {
-    Meta* m1 = this;
+    Meta* m1 = const_cast<Meta*>(this);
     Meta* m2 = const_cast<Meta*>(&meta);
     while (m1 && m2) {
       // if types equeal go to subtypes
@@ -66,7 +66,7 @@ namespace Type {
   }
 
   std::array<Meta *, default_flat_types_cnt> &getDefaultFlatTypes() {
-    std::array<Meta *, default_flat_types_cnt> flat_types;
+    static std::array<Meta *, default_flat_types_cnt> flat_types;
     for (size_t i = 0; i < default_flat_types_cnt; ++i) {
       flat_types[i] = new Meta;
       flat_types[i]->type_id = i;

@@ -4,3 +4,4 @@
 CMakeSettings.json
 **/*.eparse*
 **/*.elex*
+**/*.irpascal*

@@ -55,6 +55,8 @@ private:
   std::string readBackwards(ulong p) const;
   std::string readForward(ulong p) const;
   
+  size_t getLineFromPos(size_t p) const;
+
   std::string format_error(ulong p, ulong end_p) const;
   // void report_warning(ReportMeta meta, const char* format, ...);
   // void report_info(ReportMeta meta, );

@@ -78,7 +78,8 @@ void freeAst(Ast* ast) {
     DELETE_NOT_NULL(var_decl->ident);
     var_decl->ident = nullptr;
     
-    freeAst(var_decl->var_type);
+    if (var_decl->var_type)
+      freeAst(var_decl->var_type);
     var_decl->var_type = nullptr;
   }break;
     
@@ -101,7 +102,8 @@ void freeAst(Ast* ast) {
   case AstType::FuncArg: {
     CAST_INIT_AST(func_arg, FuncArg);
     delete func_arg->ident;
-    freeAst(func_arg->var_type);
+    if (func_arg->var_type)
+      freeAst(func_arg->var_type);
     func_arg->ident = nullptr;
     func_arg->var_type = nullptr;
   }break;

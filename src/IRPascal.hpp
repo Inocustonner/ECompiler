@@ -105,6 +105,7 @@ void freeIRP(IRPascalNode *node);
 #ifndef PARSER
 struct Ast;
 struct AstExpr;
+struct AstVarType;
 #endif
 
 enum class CastType {
@@ -131,6 +132,7 @@ struct IRPascalProducer {
   std::unique_ptr<IRPascalNodeBlock> produce(Ast *&ast);
   std::unique_ptr<IRPascalNodeBlock>
   produceStmtBlock(Ast /*StmtBlock*/ *&ast_stmt_block);
+  ptr_opt_own<Type::Meta> typeMetaFromAst(AstVarType*& ast_type);
   void produceVarDecl(Ast /*VarDecl*/ *&ast_var_decl);
   void produceFuncDecl(Ast /*FuncDecl*/ *&ast_func_decl);
   void correctBasicNodeMutate(IRPascalNodeMutate *&mut, AstExpr* expr);

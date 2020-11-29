@@ -352,7 +352,7 @@ ERROR_REPORT_METHOD errorUndefinedType(ulong region_start, ulong region_end,
   reporter.report_error({error::ErrorEnum::Undefined_Type, region_start,
                          region_end, type_ident_location_p,
                          type_ident_location_end_p},
-                        "Undefined type %s", type_alias);
+                        "Undefined type %s", type_alias.data());
 }
 
 ERROR_REPORT_METHOD errorNotAType(ulong region_start, ulong region_end,
@@ -378,8 +378,8 @@ ERROR_REPORT_METHOD errorInvalidCast(ulong region_start, ulong region_end,
                                      ptr_view<Type::Meta> src_type) {
   reporter.report_error(
       {error::ErrorEnum::Invalid_Cast, region_start, region_end},
-      "Invalid cast type '%s' to type '%s'", src_type->getFullTypeName(),
-      dst_type->getFullTypeName());
+      "Invalid cast type '%s' to type '%s'", src_type->getFullTypeName().c_str(),
+      dst_type->getFullTypeName().c_str());
 }
 
 #undef ERROR_REPORT_METHOD
@@ -388,9 +388,10 @@ std::unique_ptr<IRPascalNodeBlock> IRPascalProducer::produce(Ast *&ast) {
   curr_sym_table = new PasSymTable;
 
   // Fill types in the symbol_table
-  for (Type::Meta *&meta : Type::getDefaultFlatTypes()) {
+  auto types = Type::getDefaultFlatTypes();
+  for (Type::Meta *&meta : types) {
     IRPSymbolType *sym_type = new IRPSymbolType{};
-    sym_type->ident.reset(new std::string(std::move(meta->name)));
+    sym_type->ident.reset(new std::string(meta->name));
     own(sym_type->var_type, meta);
 
     curr_sym_table->insert(*sym_type->ident, sym_type);
@@ -538,6 +539,28 @@ void IRPascalProducer::pushStmt(std::unique_ptr<IRPascalNode> &&node) {
       std::forward<std::unique_ptr<IRPascalNode> &&>(node));
 }
 
+ptr_opt_own<Type::Meta> IRPascalProducer::typeMetaFromAst(AstVarType*& ast_type) {
+  ptr_opt_own<Type::Meta> meta = nullptr;
+  ptr_view<IRPSymbolType> sym_type = nullptr;
+  if (ensureSymbolType(*ast_type->type_ident, sym_type, ast_type)) {
+    meta = ptr_opt_own{sym_type->var_type.get(), false};
+    for (AstVarType::TypeMod& mod: ast_type->mods) {
+      assert(mod.mod != TypeModEnum::Array);
+      assert(mod.expr == nullptr);
+      if (mod.mod == TypeModEnum::Ptr) {
+        auto subtype = std::move(meta);
+        meta = ptr_opt_own{ new Type::Meta{}, true };
+        meta->name = "*";
+        meta->type_id = Type::BuiltIn_Ptr;
+        meta->subtype = std::move(subtype);
+      }
+    }
+  }
+  freeAst(ast_type);
+  ast_type = nullptr;
+  return meta;
+}
+
 void IRPascalProducer::produceVarDecl(Ast /*VarDecl*/ *&ast_var_decl) {
   // is var already in the scope
   assert(ast_var_decl->ast == AstType::VarDecl);
@@ -552,9 +575,10 @@ void IRPascalProducer::produceVarDecl(Ast /*VarDecl*/ *&ast_var_decl) {
     // sym_var->end_p = var_decl->end_p;
 
     ptr_view<IRPSymbolType> sym_type = nullptr;
-    if (ensureSymbolType(*var_decl->var_type->type_ident, sym_type, var_decl)) {
+    ptr_opt_own<Type::Meta> type_ptr = typeMetaFromAst(var_decl->var_type);
+    if (type_ptr) {
       sym_var->var_type =
-          std::unique_ptr<Type::Meta>(sym_type->var_type->deep_copy());
+          std::unique_ptr<Type::Meta>(type_ptr.unown());
       // put in the symbol table
       curr_sym_table->insert(*sym_var->ident, sym_var);
 
@@ -567,7 +591,7 @@ void IRPascalProducer::produceVarDecl(Ast /*VarDecl*/ *&ast_var_decl) {
         var_node->sym = sym_var;
         var_node->var_type =
             ptr_opt_own{sym_var->var_type.get(), false}; // non-owning
-
+        inheritPosition(var_node, var_decl);
         current_block->stmts.push_back(produceAssignMutation(
             std::move(var_node), std::move(src), var_decl));
       }
@@ -604,11 +628,12 @@ void IRPascalProducer::produceFuncDecl(Ast /*FuncDecl*/ *&ast_func_decl) {
     // put args in the scope
     for (AstFuncArg *ast_arg : func_decl->args) {
       ptr_view<IRPSymbolType> type_sym = nullptr;
-      if (ensureSymbolType(*ast_arg->var_type->type_ident, type_sym, ast_arg)) {
+      ptr_opt_own<Type::Meta> type_ptr = typeMetaFromAst(ast_arg->var_type);
+      if (type_ptr) {
         IRPSymbolArg *sym_arg = new IRPSymbolArg{};
         own(sym_arg->ident, ast_arg->ident);
         sym_arg->var_type =
-            std::unique_ptr<Type::Meta>(type_sym->var_type->deep_copy());
+            std::unique_ptr<Type::Meta>(type_ptr.unown());
 
         inheritPosition(sym_arg, ast_arg);
         if (!insertSymbol(sym_arg)) {
@@ -626,11 +651,10 @@ void IRPascalProducer::produceFuncDecl(Ast /*FuncDecl*/ *&ast_func_decl) {
     // set the ret type
     if (func_decl->ret_type) {
       ptr_view<IRPSymbolType> ret_type_sym = nullptr;
-      if (func_decl->ret_type &&
-          ensureSymbolType(*func_decl->ret_type->type_ident, ret_type_sym,
-                           func_decl)) {
+      ptr_opt_own<Type::Meta> type_ptr = typeMetaFromAst(func_decl->ret_type);
+      if (type_ptr) {
         sym_func->ret_type =
-            std::unique_ptr<Type::Meta>(ret_type_sym->var_type->deep_copy());
+            std::unique_ptr<Type::Meta>(type_ptr.unown());
       } else {
         /*sym_func->ret_type =
             static_cast<IRPSymbolType *>(findSymbol("void"))->var_type;*/
@@ -654,30 +678,6 @@ void IRPascalProducer::produceFuncDecl(Ast /*FuncDecl*/ *&ast_func_decl) {
   }
   freeAst(ast_func_decl);
   ast_func_decl = nullptr;
-}
-
-void IRPascalProducer::correctBasicNodeMutate(IRPascalNodeMutate *&mut,
-                                              AstExpr *expr) {
-  assert(mut->dst && mut->src);
-  assert(mut->mutation != IRMutation::Assign);
-  if (mut->dst->node_type == IRPascalNodeType::Const &&
-      mut->src->node_type == IRPascalNodeType::Const) {
-    // assign first const to temp, and set temp as dst
-    std::unique_ptr<IRPascalNodeVar> temp = std::unique_ptr<IRPascalNodeVar>(
-        pushTemp(getNodeVarTypeView(mut->dst)));
-
-    auto uptr_temp_copy = uptr_deep_copy_irp_node<IRPascalNodeVar>(temp);
-    current_block->stmts.push_back(
-        produceAssignMutation(std::move(temp), std::move(mut->dst), expr));
-
-    mut->dst = std::move(uptr_temp_copy); // create a copy
-  } else if (mut->dst->node_type == IRPascalNodeType::Const &&
-             mut->src->node_type == IRPascalNodeType::Var) {
-    std::swap(mut->dst, mut->src);
-  } /*else if (mut->src->node_type == IRPascalNodeType::Var &&
-             static_cast<IRPascalNodeVar *>(mut->src.get())->id > -1) {
-    popTemp();
-  }*/
 }
 
 std::unique_ptr<IRPascalNodeMutate>
@@ -766,11 +766,11 @@ IRPascalProducer::produceAssignMutation(std::unique_ptr<IRPascalNode> &&dst,
     errorAssignmentToConst(ast_with_assignment->p, ast_with_assignment->end_p);
     return nullptr;
   }
-
+  auto src_type = getNodeVarTypeView(src.get())->deep_copy();
   src = produceCast(std::move(src), getNodeVarTypeView(dst));
   if (!src) {
     errorInvalidCast(ast_with_assignment->p, ast_with_assignment->end_p,
-                     getNodeVarTypeView(dst), getNodeVarTypeView(src));
+                     getNodeVarTypeView(dst), src_type);
     return nullptr;
   }
   IRPascalNodeMutate *mut = new IRPascalNodeMutate{};
